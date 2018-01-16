@@ -1,0 +1,119 @@
+---
+title: 'Title: Severe Weather Damages Property and Impacts Public Health'
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r include=FALSE}
+library(R.utils)
+```
+
+
+Synopsis: In order to briefly describe and summarize this analysis we will find, in short, that severe storms and other dangerous weather conditions often result in economic damage to property and public health issues. Severe weather is hard to predict. Dangerous storms can appear or disappear with little warning. These storms can also change direction and strength without any observable cause. Using data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database, we will investigate the types of events that are most harmful ecnomically and heathfully.
+
+### Useful Links
+
+[Storm Data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)
+
+[Documentation for Data File](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+
+[National Climatic Data Center Storm Events FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+
+## Data Processing
+
+The compressed file can be read direct into memory, but it is preferableh to not repeat that processing over and over. Will uncompress the file once and read it uncompressed.
+Download.file() to tranfer the compressed file from the web to the local system.
+bunzip2() to (conditionally) uncompress the file to the local system.
+read.csv() to load the data into memory.
+```{r}
+if(F) {
+  dataUrl <- 'https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2'
+  download.file(dataUrl, 'StormData.csv.bz2')
+  rm(dataUrl)
+}
+bunzip2("StormData.csv.bz2", "StormData.csv", remove = FALSE, skip = TRUE)
+storms <- read.csv('StormData.csv')
+```
+
+We get a DataFrame of `r nrow(storms)` observations and `r length(storms)` variables.
+
+
+## Data Exploration
+
+The data set contains `r length(unique(storms$EVTYPE))` unique types of weather events.
+
+Values in the PROPDMG column need to be adjusted by PROPDMGEXP. This adjustment is not clearly defined in the above provided document. Found info at the following link that further clarifies the treatment of PROPDMGEXP.
+
+[Exp Treatment](http://rstudio-pubs-static.s3.amazonaws.com/58957_37b6723ee52b455990e149edde45e5b6.html)
+
+
+Create adjustment lookup table and merge it with the base data set.
+```{r}
+propdmgexp <- read.csv('propdmgexp.csv')
+storms <- merge(storms, propdmgexp, by.x='PROPDMGEXP', by.y='PROPDMGEXP')
+rm(propdmgexp)
+```
+
+
+Adjust Prop Damage values with the merged exp values to get final prop damage total
+```{r}
+storms$propDmgTot <- with(storms, PROPDMG * EXP)
+summary(storms$propDmgTot)
+```
+
+
+Combine Injuries and Fatalities to arrive at total human impact.
+```{r}
+storms$humanImpact <- with(storms, FATALITIES + INJURIES)
+```
+
+
+## Results
+
+Aggregate human cost and total adjusted property damage by event type.
+```{r}
+propSmmry <- aggregate(propDmgTot~EVTYPE, storms, sum)
+pplSmmry <- aggregate(humanImpact~EVTYPE, storms, sum)
+```
+
+
+Sort both summary sets descending by impact.
+```{r}
+pplSmmry <- pplSmmry[order(pplSmmry$humanImpact, decreasing = T), ]
+propSmmry <- propSmmry[order(propSmmry$propDmgTot, decreasing = T), ]
+```
+
+
+Plot the distributions of the top events for each type.
+```{r}
+par(mfrow=c(2,1))
+with( pplSmmry[0:10,], barplot(humanImpact, names.arg=EVTYPE, main='Human Impact Events - Top 10') )
+with( propSmmry[0:10,], barplot(propDmgTot, names.arg=EVTYPE, main='Property Damage Events - Top 10') )
+```
+
+
+The top 10 events by human impact are:
+```{r}
+pplSmmry[0:10,]
+```
+
+
+The top 10 events by property damage are:
+```{r}
+propSmmry[0:10,]
+```
+
+
+---
+
+### Conclusion
+
+The events that are most harmful to population health are **`r pplSmmry[1,1]`**.
+
+The events that have the greatest economic consequences are **`r propSmmry[1,1]`**.
+
+---
